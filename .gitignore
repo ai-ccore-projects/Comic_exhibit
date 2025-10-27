@@ -1,0 +1,8 @@
+.DS_Store
+# build
+kiosk/dist/
+# env
+.env
+Backend/.venv/
+__pycache__/
+*.pyc
