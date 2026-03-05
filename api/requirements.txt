@@ -5,5 +5,4 @@ requests==2.32.3
 openai==1.52.2
 python-dotenv
 pillow
-google-genai>=0.3.0
-google-generativeai
+replicate

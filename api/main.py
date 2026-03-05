@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
-from google import genai
+import replicate
 from PIL import Image
 from io import BytesIO
 import os
@@ -11,9 +11,7 @@ import traceback
 # Load environment variables (e.g., your Gemini API key)
 load_dotenv()
 
-# --- RECOMMENDED API KEY CONFIGURATION ---
-# Create a Client instance, which will handle authentication.
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Replicate API handles token natively from OS env REPLICATE_API_TOKEN
 
 app = FastAPI()
 
@@ -117,23 +115,31 @@ Generate a visually cohesive, single-page **comic strip** divided into 4 sequent
 """
         # ------------------------------------
 
-        contents = [final_prompt, pil_image]
-        print("******** FINAL PROMPT MODE:", mode)
-        print("******** FINAL PROMPT:\n", final_prompt)
-
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-image-preview",
-            contents=contents,
+        # Save image to temporary bytes for Replicate input
+        img_byte_arr = BytesIO()
+        pil_image.save(img_byte_arr, format="PNG")
+        img_byte_arr.seek(0)
+        
+        output = replicate.run(
+            "google/gemini-2.5-flash-image",
+            input={
+                "image": img_byte_arr,
+                "prompt": final_prompt
+            }
         )
 
-        # Extract and return image
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                pil_image = Image.open(BytesIO(part.inline_data.data))
-                img_byte_arr = BytesIO()
-                pil_image.save(img_byte_arr, format="PNG")
-                img_byte_arr.seek(0)
-                return Response(content=img_byte_arr.getvalue(), media_type="image/png")
+        # Output is an iterator of strings containing the URLs to the images
+        # Flash image outputs a list with one item
+        output_url = ""
+        for item in output:
+             output_url = item
+        
+        # Download the generated image bytes and return them
+        import requests
+        img_response = requests.get(output_url)
+        img_response.raise_for_status()
+        
+        return Response(content=img_response.content, media_type="image/png")
 
         raise HTTPException(status_code=500, detail="No image found in Gemini API response.")
 
