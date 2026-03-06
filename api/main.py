@@ -129,13 +129,19 @@ Generate a visually cohesive, single-page **comic strip** divided into 4 sequent
             }
         )
 
-        # Output is an iterator of strings containing the URLs to the images
-        # Flash image outputs a list with one item
-        output_url = ""
-        for item in output:
-             output_url = item
+        # Check if output is a FileOutput or list
+        if isinstance(output, list) and len(output) > 0:
+            result_item = output[0]
+        else:
+            result_item = output
+
+        # Replicate's Python client returns FileOutput objects that can be read directly
+        if hasattr(result_item, "read"):
+            image_data = result_item.read()
+            return Response(content=image_data, media_type="image/png")
         
-        # Download the generated image bytes and return them
+        # Fallback if it's a string URL
+        output_url = str(result_item)
         import requests
         img_response = requests.get(output_url)
         img_response.raise_for_status()
