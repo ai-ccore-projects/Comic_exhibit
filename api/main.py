@@ -117,13 +117,14 @@ Generate a visually cohesive, single-page **comic strip** divided into 4 sequent
 
         # Save image to temporary bytes for Replicate input
         img_byte_arr = BytesIO()
+        img_byte_arr.name = "image.png"
         pil_image.save(img_byte_arr, format="PNG")
         img_byte_arr.seek(0)
         
         output = replicate.run(
-            "google/gemini-2.5-flash-image",
+            "google/nano-banana",
             input={
-                "image": img_byte_arr,
+                "image_input": [img_byte_arr],
                 "prompt": final_prompt
             }
         )
