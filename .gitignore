@@ -4,5 +4,6 @@ kiosk/dist/
 # env
 .env
 Backend/.venv/
+venv/
 __pycache__/
 *.pyc
