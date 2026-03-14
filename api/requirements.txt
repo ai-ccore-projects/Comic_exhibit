@@ -5,4 +5,5 @@ requests==2.32.3
 openai==1.52.2
 python-dotenv
 pillow
-replicatesupabase==2.3.4
+replicate
+supabase==2.3.4
