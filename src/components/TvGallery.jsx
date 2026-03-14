@@ -15,6 +15,7 @@ export default function TvGallery() {
   const newSubmissionTimerRef = useRef(null);
 
   const fetchSubmissions = useCallback(async () => {
+    if (!supabase) return;
     try {
       const { data, error } = await supabase
         .from('comic_submissions')
@@ -47,6 +48,7 @@ export default function TvGallery() {
   }, [fetchSubmissions]);
 
   useEffect(() => {
+    if (!supabase) return;
     const channel = supabase
       .channel("comic_submissions")
       .on(
