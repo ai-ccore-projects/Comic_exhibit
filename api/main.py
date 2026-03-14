@@ -7,9 +7,12 @@ from io import BytesIO
 import os
 from dotenv import load_dotenv
 import traceback
+import uuid
+from supabase import create_client, Client
 
 # Load environment variables (e.g., your Gemini API key)
-load_dotenv()
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env.local")
+load_dotenv(env_path)
 
 # Replicate API handles token natively from OS env REPLICATE_API_TOKEN
 
@@ -136,19 +139,50 @@ Generate a visually cohesive, single-page **comic strip** divided into 4 sequent
             result_item = output
 
         # Replicate's Python client returns FileOutput objects that can be read directly
+        image_data = None
         if hasattr(result_item, "read"):
             image_data = result_item.read()
+        else:
+            # Fallback if it's a string URL
+            output_url = str(result_item)
+            import requests
+            img_response = requests.get(output_url)
+            img_response.raise_for_status()
+            image_data = img_response.content
+        
+        if image_data:
+            # Let's save to Supabase
+            supabase_url = os.getenv("SUPABASE_URL")
+            supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            
+            if supabase_url and supabase_key:
+                try:
+                    supabase_client: Client = create_client(supabase_url, supabase_key)
+                    
+                    # Upload to storage
+                    filename = f"comic_{uuid.uuid4().hex}.png"
+                    
+                    supabase_client.storage.from_("comic-artworks").upload(
+                        filename, 
+                        image_data, 
+                        {"content-type": "image/png"}
+                    )
+                    
+                    public_url = supabase_client.storage.from_("comic-artworks").get_public_url(filename)
+                    
+                    # Insert to db
+                    supabase_client.table("comic_submissions").insert({
+                        "generated_url": public_url,
+                        "style": user_prompt,
+                        "mode": mode
+                    }).execute()
+                    print(f"Successfully uploaded to supabase: {public_url}")
+                except Exception as e:
+                    print("Failed to save to supabase:", e)
+                    
             return Response(content=image_data, media_type="image/png")
-        
-        # Fallback if it's a string URL
-        output_url = str(result_item)
-        import requests
-        img_response = requests.get(output_url)
-        img_response.raise_for_status()
-        
-        return Response(content=img_response.content, media_type="image/png")
 
-        raise HTTPException(status_code=500, detail="No image found in Gemini API response.")
+        raise HTTPException(status_code=500, detail="No image found in API response.")
 
     except Exception as e:
         traceback.print_exc()

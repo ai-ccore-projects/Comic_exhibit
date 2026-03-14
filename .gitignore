@@ -7,3 +7,13 @@ Backend/.venv/
 venv/
 __pycache__/
 *.pyc
+.vercel
+.env*.local
+
+# Vite logs
+vite_output.txt
+backend.log
+api/backend.log
+
+# Node Modules
+node_modules/

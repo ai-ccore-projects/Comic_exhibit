@@ -16,9 +16,14 @@ import p3 from "./assets/RajaRaviVarma.JPG";
 import p4 from "./assets/FridaKahlo.JPG";
 import p5 from "./assets/ClaudeMonet.JPG";
 import p6 from "./assets/LeonardoDaVinci.JPG";
+import TvGallery from "./components/TvGallery";
 
 export default function App() {
   useSafeVh();
+
+  if (window.location.pathname === '/tv') {
+    return <TvGallery />;
+  }
 
   // Flow: "landing" -> "startFX" -> "demo" -> "intro" -> "kiosk"
   const [screen, setScreen] = useState("landing");
