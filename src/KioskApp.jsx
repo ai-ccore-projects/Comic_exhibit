@@ -1,9 +1,11 @@
 // KioskApp.jsx
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Sparkles, Wand2, ChevronDown } from "lucide-react";
+import { Camera, Sparkles } from "lucide-react";
 import TitleDisplay from "./components/TitleDisplay";
 import ProcessingDisplay from "./components/ProcessingDisplay";
+import Keyboard from "react-simple-keyboard";
+import "react-simple-keyboard/build/css/index.css";
 
 const BACKEND_URL = "/api";
 
@@ -80,9 +82,22 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
   const [countdown, setCountdown] = useState(0);
 
   const [prompt, setPrompt] = useState("");
-  const [artistOpen, setArtistOpen] = useState(false);
   const [selectedArtist, setSelectedArtist] = useState(ARTISTS[0]);
   const [mode, setMode] = useState("portrait"); // portrait | storyline
+
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const keyboardRef = useRef(null);
+
+  const onChangeKeyboard = (input) => {
+    setPrompt(input);
+  };
+  const onChangePrompt = (e) => {
+    const val = e.target.value;
+    setPrompt(val);
+    if (keyboardRef.current) {
+      keyboardRef.current.setInput(val);
+    }
+  };
 
   // ✅ Preselect artist + mode passed from intro
   useEffect(() => {
@@ -135,6 +150,47 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
     };
     start();
   }, [stream]);
+
+  // --- Smart Idle Timer Logic ---
+  useEffect(() => {
+    let timeoutId;
+    
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      // Wait for 30s of inactivity to trigger onHome
+      timeoutId = setTimeout(() => {
+        onHome();
+      }, 30000);
+    };
+
+    // If generating/refining, pause the timer completely.
+    // If we're not running a job, start the timer now.
+    if (rendering) {
+      clearTimeout(timeoutId);
+    } else {
+      resetTimer();
+    }
+
+    const handleActivity = () => {
+      // Don't reset anything if we are currently rendering an image.
+      if (!rendering) {
+        resetTimer();
+      }
+    };
+
+    // Listen to usual kiosk interaction events
+    window.addEventListener("pointerdown", handleActivity, { passive: true });
+    window.addEventListener("pointermove", handleActivity, { passive: true });
+    window.addEventListener("keydown", handleActivity);
+
+    // Cleanup listeners and intervals
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener("pointerdown", handleActivity);
+      window.removeEventListener("pointermove", handleActivity);
+      window.removeEventListener("keydown", handleActivity);
+    };
+  }, [rendering, onHome]);
 
   useEffect(() => {
     const handler = async () => {
@@ -248,42 +304,11 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
       setNewResult(newObjectUrl);
     } catch (e) {
       console.error("GENERATE failed:", e);
-    } finally {
-      setRendering(false);
+      setRendering(false); // Only reset on error; on success, animation completion will reset it.
     }
   };
 
-  const handleRefine = async () => {
-    const trimmed = (builtPrompt || "").trim();
-    if (!trimmed) return console.error("Prompt required (select an artist or add text)");
 
-    const src = currentImageRef.current || resultUrl || capturedUrlRef.current;
-    if (!src) return console.error("No image to refine");
-
-    setRendering(true);
-    try {
-      const imgBlob = await (await fetch(src)).blob();
-      const form = new FormData();
-      form.append("image_file", imgBlob, "refine.png");
-      form.append("prompt", trimmed);
-      form.append("mode", mode);
-
-      const response = await fetch(`${BACKEND_URL}/edit`, {
-        method: "POST",
-        body: form,
-      });
-      if (!response.ok) throw new Error(`Backend error during refine (${response.status})`);
-
-      const outBlob = await response.blob();
-      const newObjectUrl = URL.createObjectURL(outBlob);
-      setNewResult(newObjectUrl);
-      setShowCapturedImage(false);
-    } catch (e) {
-      console.error("REFINE failed:", e);
-    } finally {
-      setRendering(false);
-    }
-  };
 
   const onClickCapture = () => {
     runCountdown(3, async () => {
@@ -358,52 +383,7 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
           {/* Display Column */}
           <div className="w-full rounded-2xl border border-white/10 bg-slate-900/50 overflow-hidden shadow-xl">
             {/* Artist + Mode selector */}
-            <div className="p-3 border-b border-white/10 flex items-center justify-between gap-3">
-              {/* Artist Dropdown */}
-              <div className="relative inline-block">
-                <button
-                  type="button"
-                  onClick={() => setArtistOpen((s) => !s)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 px-3 py-2"
-                  aria-haspopup="listbox"
-                  aria-expanded={artistOpen}
-                >
-                  <span className="font-medium">Choose Artist</span>
-                  <ChevronDown className="w-4 h-4 opacity-80" />
-                </button>
-
-                <AnimatePresence>
-                  {artistOpen && (
-                    <motion.ul
-                      initial={{ opacity: 0, y: -6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.15 }}
-                      role="listbox"
-                      tabIndex={-1}
-                      className="absolute z-20 mt-2 w-64 max-h-64 overflow-auto rounded-xl border border-white/10 bg-slate-900/95 backdrop-blur shadow-xl"
-                    >
-                      {ARTISTS.map((a) => (
-                        <li key={a.key}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedArtist(a);
-                              setArtistOpen(false);
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-white/10"
-                            role="option"
-                            aria-selected={selectedArtist?.key === a.key}
-                          >
-                            {a.name}
-                          </button>
-                        </li>
-                      ))}
-                    </motion.ul>
-                  )}
-                </AnimatePresence>
-              </div>
-
+            <div className="p-3 border-b border-white/10 flex items-center justify-end gap-3">
               {/* Animated Mode Toggle */}
               <div className="relative w-40 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-between cursor-pointer overflow-hidden">
                 <motion.div
@@ -461,7 +441,8 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.3 }}
                   value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
+                  onChange={onChangePrompt}
+                  onFocus={() => setKeyboardOpen(true)}
                   placeholder="Describe your storyline… (artist style added automatically)"
                   className="w-full h-36 rounded-xl bg-slate-900/70 border border-white/10 p-3 outline-none"
                 />
@@ -494,14 +475,7 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
               <Sparkles className="w-4 h-4" /> Generate
             </button>
 
-            <button
-              onClick={handleRefine}
-              disabled={!hasResult || (!builtPrompt && !prompt.trim()) || rendering}
-              className="rounded-xl px-4 py-3 bg-emerald-500/90 hover:bg-emerald-500 text-white flex items-center justify-center gap-2 disabled:opacity-60"
-              title={builtPrompt ? builtPrompt : "Select an artist or type a prompt"}
-            >
-              <Wand2 className="w-4 h-4" /> Refine
-            </button>
+
 
             <button
               onClick={() => {
@@ -517,6 +491,37 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
       </main>
 
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Virtual Keyboard Overlay */}
+      <AnimatePresence>
+        {keyboardOpen && mode === "storyline" && (
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="fixed bottom-0 left-0 right-0 z-[100] bg-slate-900/95 backdrop-blur-md border-t border-white/10 p-4 pb-8 shadow-2xl"
+          >
+            <div className="max-w-5xl mx-auto">
+              <div className="flex justify-end mb-2">
+                <button
+                  onClick={() => setKeyboardOpen(false)}
+                  className="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2 rounded-xl font-medium"
+                >
+                  Done
+                </button>
+              </div>
+              <Keyboard
+                keyboardRef={(r) => (keyboardRef.current = r)}
+                onChange={onChangeKeyboard}
+                inputName="default"
+                theme={"hg-theme-default myTheme1"}
+                physicalKeyboardHighlight={true}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
