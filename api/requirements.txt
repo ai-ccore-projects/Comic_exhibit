@@ -6,4 +6,4 @@ openai==1.52.2
 python-dotenv
 pillow
 replicate
-supabase==2.3.4
+supabase>=2.28.0

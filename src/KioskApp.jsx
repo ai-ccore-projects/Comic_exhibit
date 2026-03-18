@@ -79,6 +79,7 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
   const [showCapturedImage, setShowCapturedImage] = useState(false);
   const [resultUrl, setResultUrl] = useState("");
   const [rendering, setRendering] = useState(false);
+  const [generatingResultUrl, setGeneratingResultUrl] = useState(null); // Result from current generation only
   const [countdown, setCountdown] = useState(0);
 
   const [prompt, setPrompt] = useState("");
@@ -286,6 +287,7 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
     if (!src) return console.error("No captured image to generate from");
 
     setRendering(true);
+    setGeneratingResultUrl(null); // Clear so ProcessingDisplay keeps flipping until new result arrives
     try {
       const imgBlob = await (await fetch(src)).blob();
       const form = new FormData();
@@ -301,6 +303,7 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
 
       const outBlob = await response.blob();
       const newObjectUrl = URL.createObjectURL(outBlob);
+      setGeneratingResultUrl(newObjectUrl); // Pass to ProcessingDisplay so it flips to final result
       setNewResult(newObjectUrl);
     } catch (e) {
       console.error("GENERATE failed:", e);
@@ -322,11 +325,15 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
 
   const renderContent = () => {
     if (rendering) {
+      const sourceImageUrl = capturedUrlRef.current || currentImageRef.current || resultUrl;
       return (
         <ProcessingDisplay
-          capturedImageUrl={capturedUrlRef.current}
-          resultUrl={resultUrl}
-          onAnimationComplete={() => setRendering(false)}
+          capturedImageUrl={sourceImageUrl}
+          resultUrl={generatingResultUrl}
+          onAnimationComplete={() => {
+            setRendering(false);
+            setGeneratingResultUrl(null);
+          }}
         />
       );
     }

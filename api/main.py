@@ -11,10 +11,20 @@ import uuid
 from supabase import create_client, Client
 
 # Load environment variables (e.g., your Gemini API key)
-env_path = os.path.join(os.path.dirname(__file__), "..", ".env.local")
-load_dotenv(env_path)
+_api_dir = os.path.dirname(__file__)
+load_dotenv(os.path.join(_api_dir, "..", ".env.local"))  # project root
+load_dotenv(os.path.join(_api_dir, ".env"))               # api/.env fallback
+load_dotenv(os.path.join(_api_dir, ".env.local"))         # api/.env.local fallback
 
 # Replicate API handles token natively from OS env REPLICATE_API_TOKEN
+
+# Log Supabase config at startup (masked)
+_sb_url = os.getenv("SUPABASE_URL")
+_sb_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+if _sb_url and _sb_key:
+    print(f"[Supabase] Config loaded for project: {_sb_url.replace('https://', '').split('.supabase.co')[0][:12]}...")
+else:
+    print("[Supabase] WARNING: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set - uploads will be skipped")
 
 app = FastAPI()
 
@@ -155,30 +165,40 @@ Generate a visually cohesive, single-page **comic strip** divided into 4 sequent
             supabase_url = os.getenv("SUPABASE_URL")
             supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
             
-            if supabase_url and supabase_key:
+            if not supabase_url or not supabase_key:
+                print("[Supabase] WARNING: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing - skipping upload")
+                print(f"[Supabase] SUPABASE_URL present: {bool(supabase_url)}, SUPABASE_SERVICE_ROLE_KEY present: {bool(supabase_key)}")
+            else:
                 try:
+                    # Log which project we're targeting (masked)
+                    _masked = supabase_url.replace("https://", "").split(".supabase.co")[0][:8] + "..." if supabase_url else "?"
+                    print(f"[Supabase] Attempting upload to project: {_masked}")
+                    
                     supabase_client: Client = create_client(supabase_url, supabase_key)
                     
-                    # Upload to storage
+                    # Upload to storage (storage3 API: path, file, file_options)
                     filename = f"comic_{uuid.uuid4().hex}.png"
                     
                     supabase_client.storage.from_("comic-artworks").upload(
-                        filename, 
-                        image_data, 
-                        {"content-type": "image/png"}
+                        path=filename,
+                        file=image_data,
+                        file_options={"content-type": "image/png"}
                     )
                     
                     public_url = supabase_client.storage.from_("comic-artworks").get_public_url(filename)
                     
                     # Insert to db
-                    supabase_client.table("comic_submissions").insert({
+                    insert_result = supabase_client.table("comic_submissions").insert({
                         "generated_url": public_url,
                         "style": user_prompt,
                         "mode": mode
                     }).execute()
-                    print(f"Successfully uploaded to supabase: {public_url}")
+                    
+                    print(f"[Supabase] Successfully uploaded: {public_url}")
+                    print(f"[Supabase] Insert result: {len(insert_result.data or [])} row(s) created")
                 except Exception as e:
-                    print("Failed to save to supabase:", e)
+                    print(f"[Supabase] FAILED: {e}")
+                    traceback.print_exc()
                     
             return Response(content=image_data, media_type="image/png")
 
