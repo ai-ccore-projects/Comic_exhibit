@@ -9,6 +9,12 @@ import "react-simple-keyboard/build/css/index.css";
 
 const BACKEND_URL = "/api";
 
+const SAMPLE_STORYLINES = [
+  "A quiet morning walk through a magical forest where the character discovers a glowing artifact hidden among ancient trees, unleashing a burst of enchanted light that transforms the woodland creatures around them",
+  "A thrilling day as a superhero saving the city from a sudden storm, soaring above skyscrapers to redirect lightning bolts and earning the cheers of grateful citizens below",
+  "An unexpected adventure at a bustling intergalactic market where the character haggles with quirky alien vendors, accidentally buys a mischievous robot companion, and escapes a comical chase through neon-lit alleyways",
+];
+
 // --- Home Button (inline; remove if you import it from App.jsx) ---
 function HomeButton({ onHome }) {
   return (
@@ -441,18 +447,37 @@ export default function KioskApp({ initialStyle, onBack, onHome }) {
             {/* Show text box only for storyline mode */}
             <AnimatePresence mode="wait">
               {mode === "storyline" && (
-                <motion.textarea
+                <motion.div
                   key="storyline-box"
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.3 }}
-                  value={prompt}
-                  onChange={onChangePrompt}
-                  onFocus={() => setKeyboardOpen(true)}
-                  placeholder="Describe your storyline… (artist style added automatically)"
-                  className="w-full h-36 rounded-xl bg-slate-900/70 border border-white/10 p-3 outline-none"
-                />
+                  className="flex flex-col gap-2"
+                >
+                  <textarea
+                    value={prompt}
+                    onChange={onChangePrompt}
+                    onFocus={() => setKeyboardOpen(true)}
+                    placeholder="Describe your storyline… (artist style added automatically)"
+                    className="w-full h-36 rounded-xl bg-slate-900/70 border border-white/10 p-3 outline-none"
+                  />
+                  <div className="flex gap-2">
+                    {SAMPLE_STORYLINES.map((sample, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setPrompt(sample);
+                          if (keyboardRef.current) keyboardRef.current.setInput(sample);
+                        }}
+                        className="flex-1 text-left text-xs px-3 py-2 rounded-lg bg-indigo-500/20 border border-indigo-400/30 hover:bg-indigo-500/35 transition line-clamp-2"
+                        title={sample}
+                      >
+                        {sample.length > 60 ? sample.slice(0, 60) + "…" : sample}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
               )}
             </AnimatePresence>
 
